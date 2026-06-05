@@ -1,0 +1,12 @@
+{
+  "name": "canvas-browser-bridge",
+  "version": "1.0.0",
+  "description": "WebSocket-Brücke zwischen Canvas Browser Extension und Claude Code",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}

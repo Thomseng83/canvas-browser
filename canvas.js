@@ -913,4 +913,97 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.addEventListener('keyup', e => {
     if (e.code === 'Space') { spaceHeld = false; updateCursor(); }
   });
+
+  // ── Bridge: Befehle von background.js empfangen ───────────────────────────
+
+  chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+    (async () => {
+      try {
+        sendResponse(await handleBridgeCmd(msg.cmd, msg.payload || {}));
+      } catch (e) {
+        sendResponse({ error: e.message });
+      }
+    })();
+    return true; // async response
+  });
+
+  async function handleBridgeCmd(cmd, payload) {
+    switch (cmd) {
+
+      case 'getPanels':
+        return {
+          panels: [...mgr.panels.values()].map(p => ({
+            id: p.id, url: p.url, live: p.live,
+            x: p.x, y: p.y, w: p.w, h: p.h,
+          }))
+        };
+
+      case 'openPanel': {
+        const p = mgr.add({
+          x: Math.max(10, Math.round((viewportEl.clientWidth  / 2 - PANEL_W / 2))),
+          y: Math.max(10, Math.round((viewportEl.clientHeight / 2 - PANEL_H / 2))),
+          url: payload.url,
+          live: true,
+        });
+        mgr.save();
+        return { ok: true, id: p.id };
+      }
+
+      case 'navigate': {
+        const p = mgr.panels.get(payload.id);
+        if (!p) return { error: 'Panel nicht gefunden' };
+        p.navigate(payload.url);
+        return { ok: true };
+      }
+
+      case 'closePanel': {
+        mgr.remove(payload.id);
+        return { ok: true };
+      }
+
+      case 'setLive': {
+        const p = mgr.panels.get(payload.id);
+        if (!p) return { error: 'Panel nicht gefunden' };
+        await p.setLive(payload.live);
+        return { ok: true };
+      }
+
+      case 'tileAll': {
+        const all = [...mgr.panels.values()];
+        if (all.length < 2) return { error: 'Weniger als 2 Panels vorhanden' };
+        tileSelected(all);
+        mgr.save();
+        return { ok: true };
+      }
+
+      case 'tilePanels': {
+        const panels = (payload.ids || [])
+          .map(id => mgr.panels.get(id))
+          .filter(Boolean);
+        if (panels.length < 2) return { error: 'Weniger als 2 gültige Panel-IDs' };
+        tileSelected(panels);
+        mgr.save();
+        return { ok: true };
+      }
+
+      case 'fullscreen': {
+        const p = mgr.panels.get(payload.id);
+        if (!p) return { error: 'Panel nicht gefunden' };
+        p.enterFullscreen();
+        return { ok: true };
+      }
+
+      case 'setCamera': {
+        if (payload.tx    !== undefined) cam.tx    = payload.tx;
+        if (payload.ty    !== undefined) cam.ty    = payload.ty;
+        if (payload.scale !== undefined) cam.scale = payload.scale;
+        applyTransform();
+        mgr.save();
+        return { ok: true };
+      }
+
+      default:
+        return { error: `Unbekannter Befehl: ${cmd}` };
+    }
+  }
 });
