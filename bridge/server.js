@@ -11,16 +11,24 @@
  *
  * Verfügbare Befehle:
  *   getPanels          → Liste aller Panels
- *   openPanel          → Neues Panel öffnen  { url }
- *   navigate           → Panel navigieren    { id, url }
- *   closePanel         → Panel schließen     { id }
- *   setLive            → Live toggle         { id, live }
- *   screenshot         → Canvas-Screenshot   {}
- *   tileAll            → Alle kacheln        {}
- *   tilePanels         → Auswahl kacheln     { ids: [1,2,3] }
- *   fullscreen         → Vollbild            { id }
- *   scrollPanel        → Panel scrollen       { id, x?, y }
- *   status             → Bridge-Status       {}
+ *   openPanel          → Neues Panel öffnen       { url }
+ *   navigate           → Panel navigieren         { id, url }
+ *   closePanel         → Panel schließen          { id }
+ *   setLive            → Live toggle              { id, live }
+ *   screenshot         → Canvas-Screenshot        {}
+ *   tileAll            → Alle kacheln             {}
+ *   tilePanels         → Auswahl kacheln          { ids: [1,2,3] }
+ *   fullscreen         → Vollbild                 { id }
+ *   scrollPanel        → Scrollen                 { id, x?, y }
+ *   clickPanel         → Element klicken          { id, selector?, x?, y? }
+ *   typePanel          → Text eingeben            { id, selector, text, clear?, submit? }
+ *   getPageText        → Seitentext lesen         { id, selector? }
+ *   waitForSelector    → Auf Element warten       { id, selector, timeout? }
+ *   getPageUrl         → Aktuelle URL             { id }
+ *   goBack             → Zurück                   { id }
+ *   goForward          → Vor                      { id }
+ *   scrollAndCapture   → Seite durchscrollen+Foto { id, step?, maxScrolls? }
+ *   status             → Bridge-Status            {}
  */
 
 const http = require('http');
