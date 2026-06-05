@@ -163,7 +163,7 @@ function forward(res, cmd, payload) {
 
 function respond(res, status, data) {
   if (res.writableEnded) return;
-  res.writeHead(status, { 'Content-Type': 'application/json' });
+  res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' });
   res.end(JSON.stringify(data, null, 2));
 }
 
