@@ -152,6 +152,38 @@ body { display: flex; flex-direction: column; }
   white-space: nowrap;
 }
 
+.tb-right-sep {
+  margin: 0 4px;
+  opacity: .4;
+}
+
+#bridge-status {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  cursor: default;
+}
+
+#bridge-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--muted);
+  flex-shrink: 0;
+  transition: background .4s;
+}
+#bridge-dot.online  { background: var(--green); box-shadow: 0 0 5px var(--green); }
+#bridge-dot.offline { background: var(--red);   box-shadow: 0 0 5px var(--red);   }
+
+#bridge-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  transition: color .4s;
+}
+#bridge-status.online  #bridge-label { color: var(--green); }
+#bridge-status.offline #bridge-label { color: var(--red);   }
+
 kbd {
   background: var(--surface2);
   border: 1px solid var(--border);

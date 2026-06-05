@@ -808,6 +808,32 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   await mgr.load();
 
+  // ── Bridge-Status-Indikator ───────────────────────────────────────────────
+  const bridgeStatusEl = document.getElementById('bridge-status');
+  const bridgeDotEl    = document.getElementById('bridge-dot');
+  const bridgeLabelEl  = document.getElementById('bridge-label');
+
+  async function checkBridgeStatus() {
+    try {
+      const r = await fetch('http://localhost:3000/status',
+        { signal: AbortSignal.timeout(2500) });
+      const data = await r.json();
+      const online = data.bridge === 'online' && data.extension === 'connected';
+      bridgeDotEl.className    = online ? 'online' : 'offline';
+      bridgeStatusEl.className = online ? 'online' : 'offline';
+      bridgeStatusEl.title     = online
+        ? 'Bridge verbunden ✓'
+        : `Bridge: ${data.bridge} | Extension: ${data.extension}`;
+    } catch {
+      bridgeDotEl.className    = 'offline';
+      bridgeStatusEl.className = 'offline';
+      bridgeStatusEl.title     = 'Bridge nicht erreichbar';
+    }
+  }
+
+  checkBridgeStatus();
+  setInterval(checkBridgeStatus, 5000);
+
   // ── Pan-Modus ──────────────────────────────────────────────────────────────
 
   let isPanMode = false, spaceHeld = false, isPanning = false;
@@ -816,7 +842,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   function updateCursor() {
     viewportEl.classList.toggle('pan-ready',  panReady() && !isPanning);
     viewportEl.classList.toggle('pan-active', isPanning);
-    if (!panReady() && !isPanning) viewportEl.className = '';
+    if (!panReady() && !isPanning) {
+      viewportEl.classList.remove('pan-ready', 'pan-active');
+    }
   }
 
   viewportEl.addEventListener('mousedown', e => {
@@ -939,9 +967,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         };
 
       case 'openPanel': {
+        const vw = viewportEl.clientWidth, vh = viewportEl.clientHeight;
+        const offset = (mgr.panels.size % 8) * 30;
+        const cx = ((vw / 2) - cam.tx) / cam.scale - PANEL_W / 2 + offset;
+        const cy = ((vh / 2) - cam.ty) / cam.scale - PANEL_H / 2 + offset;
         const p = mgr.add({
-          x: Math.max(10, Math.round((viewportEl.clientWidth  / 2 - PANEL_W / 2))),
-          y: Math.max(10, Math.round((viewportEl.clientHeight / 2 - PANEL_H / 2))),
+          x: Math.max(10, Math.round(cx)),
+          y: Math.max(10, Math.round(cy)),
           url: payload.url,
           live: true,
         });
@@ -990,6 +1022,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         const p = mgr.panels.get(payload.id);
         if (!p) return { error: 'Panel nicht gefunden' };
         p.enterFullscreen();
+        return { ok: true };
+      }
+
+      case 'closeFullscreen': {
+        closeFsOverlay();
         return { ok: true };
       }
 

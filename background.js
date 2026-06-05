@@ -82,6 +82,35 @@ async function handleCommand(cmd, payload) {
         return { dataUrl };
       }
 
+      // ── Scroll: direkt per chrome.scripting in den iframe scrollen ────────────
+      case 'scrollPanel': {
+        const tab = await ensureCanvas();
+        // Panel-URL ermitteln
+        const panelsResult = await chrome.tabs.sendMessage(tab.id, { cmd: 'getPanels', payload: {} });
+        const panel = panelsResult?.panels?.find(p => p.id === payload.id);
+        if (!panel)    return { error: 'Panel nicht gefunden' };
+        if (!panel.url) return { error: 'Panel hat keine URL' };
+
+        const scrollX = payload.x ?? 0;
+        const scrollY = payload.y ?? 0;
+
+        const frames = await chrome.webNavigation.getAllFrames({ tabId: tab.id });
+        const baseUrl = panel.url.split('?')[0];
+        const match   = frames.find(f =>
+          !f.url.startsWith('chrome-extension://') &&
+          (f.url === panel.url || f.url.startsWith(baseUrl))
+        );
+        if (!match) return { error: 'Frame nicht gefunden' };
+
+        await chrome.scripting.executeScript({
+          target: { tabId: tab.id, frameIds: [match.frameId] },
+          func: (sx, sy) => window.scrollTo(sx, sy),
+          args: [scrollX, scrollY],
+        });
+
+        return { ok: true };
+      }
+
       // ── Alle anderen Befehle → an Canvas-Seite weiterleiten ─────────────────
       case 'getPanels':
       case 'openPanel':
@@ -91,6 +120,7 @@ async function handleCommand(cmd, payload) {
       case 'tileAll':
       case 'tilePanels':
       case 'fullscreen':
+      case 'closeFullscreen':
       case 'setCamera': {
         const tab = await ensureCanvas();
         return await chrome.tabs.sendMessage(tab.id, { cmd, payload });

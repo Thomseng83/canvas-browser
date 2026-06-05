@@ -8,6 +8,8 @@
     "tabs",
     "storage",
     "alarms",
+    "scripting",
+    "webNavigation",
     "declarativeNetRequest",
     "declarativeNetRequestWithHostAccess"
   ],

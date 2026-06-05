@@ -19,6 +19,7 @@
  *   tileAll            → Alle kacheln        {}
  *   tilePanels         → Auswahl kacheln     { ids: [1,2,3] }
  *   fullscreen         → Vollbild            { id }
+ *   scrollPanel        → Panel scrollen       { id, x?, y }
  *   status             → Bridge-Status       {}
  */
 
