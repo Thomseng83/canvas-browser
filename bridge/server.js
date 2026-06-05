@@ -38,6 +38,11 @@ const pending = new Map();
 
 const wss = new WebSocketServer({ port: WS_PORT });
 
+wss.on('error', err => {
+  log('❌ WebSocket-Server Fehler:', err.message);
+  process.exit(1);
+});
+
 wss.on('connection', ws => {
   extSocket = ws;
   log('✅ Extension verbunden');
@@ -108,7 +113,12 @@ const httpServer = http.createServer((req, res) => {
   respond(res, 404, { error: 'Nicht gefunden' });
 });
 
-httpServer.listen(HTTP_PORT, () => {
+httpServer.on('error', err => {
+  log('❌ HTTP-Server Fehler:', err.message);
+  process.exit(1);
+});
+
+httpServer.listen(HTTP_PORT, '0.0.0.0', () => {
   log(`🌐 HTTP-Server läuft auf http://localhost:${HTTP_PORT}`);
   log('');
   log('── Beispiele ─────────────────────────────────────────────');
