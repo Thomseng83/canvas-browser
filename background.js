@@ -42,6 +42,19 @@ function scheduleReconnect() {
 
 connectBridge();
 
+// ── Service Worker am Leben halten (MV3 killt ihn nach ~30s Inaktivität) ──────
+chrome.alarms.create('keepAlive', { periodInMinutes: 0.4 }); // alle 24 Sek.
+
+chrome.alarms.onAlarm.addListener(alarm => {
+  if (alarm.name !== 'keepAlive') return;
+  // WebSocket neu verbinden falls getrennt
+  if (!ws || ws.readyState === WebSocket.CLOSED) {
+    connectBridge();
+  }
+  // Chrome API anfassen hält den Service Worker aktiv
+  chrome.storage.local.get('_ping');
+});
+
 // ── Befehle ausführen ─────────────────────────────────────────────────────────
 
 async function handleCommand(cmd, payload) {
