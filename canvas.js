@@ -503,6 +503,253 @@ class Panel {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Widgets (Text · Bild · Datei)
+// ─────────────────────────────────────────────────────────────────────────────
+
+function readFileAsDataUrl(file) {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(r.result);
+    r.onerror = rej;
+    r.readAsDataURL(file);
+  });
+}
+
+class Widget {
+  constructor({ id, type, x, y, w, h }, mgr) {
+    this.id = id; this.type = type;
+    this.x = x;   this.y = y;
+    this.w = w;   this.h = h;
+    this.mgr = mgr;
+  }
+
+  _applyGeometry() {
+    Object.assign(this.el.style, {
+      left: this.x + 'px', top: this.y + 'px',
+      width: this.w + 'px', height: this.h + 'px',
+    });
+  }
+
+  _initDragResize(dragEl) {
+    dragEl.addEventListener('mousedown', e => {
+      if (e.button !== 0 || e.target.tagName === 'BUTTON') return;
+      e.preventDefault();
+      this.mgr.bringToFront(this);
+      const spX = this.x, spY = this.y, sMX = e.clientX, sMY = e.clientY;
+      const onMove = mv => {
+        this.x = Math.max(0, spX + (mv.clientX - sMX) / cam.scale);
+        this.y = Math.max(0, spY + (mv.clientY - sMY) / cam.scale);
+        this._applyGeometry();
+      };
+      const onUp = () => {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup',   onUp);
+        this.mgr.save();
+      };
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup',   onUp);
+    });
+
+    this.el.querySelectorAll('.rh').forEach(h =>
+      h.addEventListener('mousedown', e => {
+        if (e.button !== 0) return;
+        e.preventDefault(); e.stopPropagation();
+        const sx = e.clientX, sy = e.clientY, sw = this.w, sh = this.h;
+        const isE = h.classList.contains('rh-e') || h.classList.contains('rh-se');
+        const isS = h.classList.contains('rh-s') || h.classList.contains('rh-se');
+        const onMove = mv => {
+          if (isE) this.w = Math.max(120, sw + (mv.clientX - sx) / cam.scale);
+          if (isS) this.h = Math.max(80,  sh + (mv.clientY - sy) / cam.scale);
+          this._applyGeometry();
+        };
+        const onUp = () => {
+          document.removeEventListener('mousemove', onMove);
+          document.removeEventListener('mouseup',   onUp);
+          this.mgr.save();
+        };
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup',   onUp);
+      }));
+  }
+
+  _esc(s) {
+    return String(s || '').replace(/[&<>"']/g,
+      c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+  }
+
+  toJSON() {
+    return { id: this.id, type: this.type,
+      x: Math.round(this.x), y: Math.round(this.y),
+      w: Math.round(this.w), h: Math.round(this.h) };
+  }
+}
+
+class TextWidget extends Widget {
+  constructor(opts, mgr) {
+    super({ ...opts, w: opts.w || 280, h: opts.h || 160 }, mgr);
+    this.text = opts.text || '';
+    this.el = this._build();
+    this._applyGeometry();
+  }
+
+  _build() {
+    const el = document.createElement('div');
+    el.className = 'widget widget-text';
+    el.innerHTML = `
+      <div class="wh">
+        <span class="wh-drag">⠿</span>
+        <span class="wh-type">T</span>
+        <button class="wh-close" title="Löschen">✕</button>
+      </div>
+      <div class="wc">
+        <div class="w-text-content" contenteditable="true"
+             spellcheck="false" placeholder="Text eingeben…"></div>
+      </div>
+      <div class="rh rh-se"></div><div class="rh rh-s"></div><div class="rh rh-e"></div>`;
+
+    this._contentEl = el.querySelector('.w-text-content');
+    this._contentEl.textContent = this.text;
+    this._contentEl.addEventListener('input', () => { this.text = this._contentEl.textContent; this.mgr.save(); });
+    this._contentEl.addEventListener('click',     e => e.stopPropagation());
+    this._contentEl.addEventListener('mousedown', e => e.stopPropagation());
+    el.querySelector('.wh-close').addEventListener('click', e => { e.stopPropagation(); this.mgr.remove(this.id); });
+    this._initDragResize(el.querySelector('.wh'));
+    return el;
+  }
+
+  setText(text) { this.text = text; this._contentEl.textContent = text; this.mgr.save(); }
+  focus()       { this._contentEl?.focus(); }
+  toJSON()      { return { ...super.toJSON(), text: this.text }; }
+}
+
+class ImageWidget extends Widget {
+  constructor(opts, mgr) {
+    super({ ...opts, w: opts.w || 400, h: opts.h || 300 }, mgr);
+    this.src = opts.src || opts.dataUrl || '';
+    this.el = this._build();
+    this._applyGeometry();
+  }
+
+  _build() {
+    const el = document.createElement('div');
+    el.className = 'widget widget-image';
+    el.innerHTML = `
+      <div class="wh">
+        <span class="wh-drag">⠿</span>
+        <span class="wh-type">🖼</span>
+        <button class="wh-close" title="Löschen">✕</button>
+      </div>
+      <div class="wc"><img class="w-img" draggable="false"></div>
+      <div class="rh rh-se"></div><div class="rh rh-s"></div><div class="rh rh-e"></div>`;
+
+    this._imgEl = el.querySelector('.w-img');
+    if (this.src) this._imgEl.src = this.src;
+    el.querySelector('.wh-close').addEventListener('click', e => { e.stopPropagation(); this.mgr.remove(this.id); });
+    this._initDragResize(el.querySelector('.wh'));
+    return el;
+  }
+
+  setSrc(src) { this.src = src; this._imgEl.src = src; this.mgr.save(); }
+  toJSON()    { return { ...super.toJSON(), src: this.src }; }
+}
+
+class FileWidget extends Widget {
+  constructor(opts, mgr) {
+    super({ ...opts, w: opts.w || 420, h: opts.h || 520 }, mgr);
+    this.src      = opts.src || opts.dataUrl || '';
+    this.filename = opts.filename || 'Datei';
+    this.mimeType = opts.mimeType || '';
+    this.el = this._build();
+    this._applyGeometry();
+  }
+
+  _build() {
+    const el    = document.createElement('div');
+    el.className = 'widget widget-file';
+    const isPdf = this.mimeType === 'application/pdf' || this.filename.toLowerCase().endsWith('.pdf');
+    const isImg = this.mimeType.startsWith('image/');
+    const icon  = isPdf ? '📄' : isImg ? '🖼' : '📎';
+
+    let preview;
+    if (isPdf)      preview = `<iframe class="w-file-embed" src="${this._esc(this.src)}"></iframe>`;
+    else if (isImg) preview = `<img class="w-img" src="${this._esc(this.src)}" draggable="false">`;
+    else            preview = `<div class="w-file-placeholder"><span>${icon}</span><span class="w-file-name">${this._esc(this.filename)}</span></div>`;
+
+    el.innerHTML = `
+      <div class="wh">
+        <span class="wh-drag">⠿</span>
+        <span class="wh-type">${icon}</span>
+        <span class="wh-filename">${this._esc(this.filename)}</span>
+        <button class="wh-close" title="Löschen">✕</button>
+      </div>
+      <div class="wc">${preview}</div>
+      <div class="rh rh-se"></div><div class="rh rh-s"></div><div class="rh rh-e"></div>`;
+
+    el.querySelector('.wh-close').addEventListener('click', e => { e.stopPropagation(); this.mgr.remove(this.id); });
+    this._initDragResize(el.querySelector('.wh'));
+    return el;
+  }
+
+  toJSON() { return { ...super.toJSON(), src: this.src, filename: this.filename, mimeType: this.mimeType }; }
+}
+
+class WidgetManager {
+  constructor(canvasEl) {
+    this.canvasEl = canvasEl;
+    this.widgets  = new Map();
+    this.nextId   = 1;
+    this._zTop    = 100;
+    this.panelMgr = null;
+  }
+
+  save() { this.panelMgr?.save(); }
+
+  add(opts) {
+    const numId = (typeof opts.id === 'string' ? parseInt(opts.id.replace('w','')) : opts.id) ?? this.nextId;
+    const id    = `w${numId}`;
+    if (numId >= this.nextId) this.nextId = numId + 1;
+
+    let w;
+    switch (opts.type) {
+      case 'text':  w = new TextWidget ({ ...opts, id }, this); break;
+      case 'image': w = new ImageWidget({ ...opts, id }, this); break;
+      case 'file':  w = new FileWidget ({ ...opts, id }, this); break;
+      default: return null;
+    }
+    this.widgets.set(id, w);
+    this.canvasEl.appendChild(w.el);
+    this.bringToFront(w);
+    return w;
+  }
+
+  remove(id) {
+    const w = this.widgets.get(id);
+    if (!w) return;
+    w.el.remove();
+    this.widgets.delete(id);
+    this.save();
+  }
+
+  removeAll() {
+    this.widgets.forEach(w => w.el.remove());
+    this.widgets.clear();
+  }
+
+  bringToFront(w) { this._zTop += 1; w.el.style.zIndex = this._zTop; }
+
+  toJSON() { return [...this.widgets.values()].map(w => w.toJSON()); }
+
+  fromJSON(items) {
+    items?.forEach(opts => {
+      const numId = typeof opts.id === 'string'
+        ? (parseInt(opts.id.replace('w','')) || this.nextId)
+        : (opts.id ?? this.nextId);
+      this.add({ ...opts, id: numId });
+    });
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Navigator
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -713,11 +960,12 @@ class Navigator {
 
 class PanelManager {
   constructor(el) {
-    this.canvasEl = el;
-    this.panels   = new Map();
-    this.nextId   = 1;
-    this._zTop    = 10;
-    this.nav      = null; // wird nach Navigator-Erstellung gesetzt
+    this.canvasEl  = el;
+    this.panels    = new Map();
+    this.nextId    = 1;
+    this._zTop     = 10;
+    this.nav       = null;
+    this.widgetMgr = null;
   }
 
   add(opts = {}) {
@@ -765,8 +1013,9 @@ class PanelManager {
   save() {
     chrome.storage.local.set({
       canvasState: {
-        panels: [...this.panels.values()].map(p => p.toJSON()),
-        cam:    { ...cam },
+        panels:  [...this.panels.values()].map(p => p.toJSON()),
+        widgets: this.widgetMgr ? this.widgetMgr.toJSON() : [],
+        cam:     { ...cam },
       }
     });
   }
@@ -785,6 +1034,9 @@ class PanelManager {
         } else {
           this.add({ x: 40, y: 40 });
         }
+        if (canvasState?.widgets?.length) {
+          this.widgetMgr?.fromJSON(canvasState.widgets);
+        }
         resolve();
       });
     });
@@ -802,9 +1054,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   canvasEl.style.height = CANVAS_H + 'px';
   applyTransform();
 
-  const mgr = new PanelManager(canvasEl);
-  const nav = new Navigator(mgr);
-  mgr.nav = nav;
+  const mgr       = new PanelManager(canvasEl);
+  const nav       = new Navigator(mgr);
+  const widgetMgr = new WidgetManager(canvasEl);
+  mgr.nav       = nav;
+  mgr.widgetMgr = widgetMgr;
+  widgetMgr.panelMgr = mgr;
 
   await mgr.load();
 
@@ -908,14 +1163,94 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   document.getElementById('btn-add').addEventListener('click', addPanel);
   document.getElementById('btn-clear-all').addEventListener('click', () => {
-    if (mgr.panels.size === 0) return;
-    if (confirm(`Alle ${mgr.panels.size} Panels löschen?`)) mgr.removeAll();
+    const total = mgr.panels.size + widgetMgr.widgets.size;
+    if (total === 0) return;
+    if (confirm(`Alle ${mgr.panels.size} Panels und ${widgetMgr.widgets.size} Widgets löschen?`)) {
+      mgr.removeAll();
+      widgetMgr.removeAll();
+      mgr.save();
+    }
+  });
+
+  // ── Widget-Toolbar-Buttons ──────────────────────────────────────────────────
+  document.getElementById('btn-add-text').addEventListener('click', () => {
+    const cx = (viewportEl.clientWidth  / 2 - cam.tx) / cam.scale;
+    const cy = (viewportEl.clientHeight / 2 - cam.ty) / cam.scale;
+    const w  = widgetMgr.add({ type: 'text', x: cx - 140, y: cy - 80 });
+    mgr.save();
+    setTimeout(() => w?.focus(), 40);
+  });
+
+  document.getElementById('btn-add-image').addEventListener('click', () =>
+    document.getElementById('image-input').click());
+
+  document.getElementById('btn-add-file').addEventListener('click', () =>
+    document.getElementById('file-input').click());
+
+  document.getElementById('image-input').addEventListener('change', async e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const src = await readFileAsDataUrl(file);
+    const cx  = (viewportEl.clientWidth  / 2 - cam.tx) / cam.scale;
+    const cy  = (viewportEl.clientHeight / 2 - cam.ty) / cam.scale;
+    widgetMgr.add({ type: 'image', src, x: cx - 200, y: cy - 150 });
+    mgr.save();
+    e.target.value = '';
+  });
+
+  document.getElementById('file-input').addEventListener('change', async e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const src = await readFileAsDataUrl(file);
+    const cx  = (viewportEl.clientWidth  / 2 - cam.tx) / cam.scale;
+    const cy  = (viewportEl.clientHeight / 2 - cam.ty) / cam.scale;
+    widgetMgr.add({ type: 'file', src, filename: file.name, mimeType: file.type, x: cx - 210, y: cy - 260 });
+    mgr.save();
+    e.target.value = '';
+  });
+
+  // ── Drag & Drop ─────────────────────────────────────────────────────────────
+  viewportEl.addEventListener('dragenter', e => { if (e.dataTransfer.types.includes('Files')) viewportEl.classList.add('drag-over'); });
+  viewportEl.addEventListener('dragleave', e => { if (!viewportEl.contains(e.relatedTarget)) viewportEl.classList.remove('drag-over'); });
+  viewportEl.addEventListener('dragover',  e => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; });
+  viewportEl.addEventListener('drop', async e => {
+    e.preventDefault();
+    viewportEl.classList.remove('drag-over');
+    const rect = viewportEl.getBoundingClientRect();
+    const cx   = (e.clientX - rect.left - cam.tx) / cam.scale;
+    const cy   = (e.clientY - rect.top  - cam.ty) / cam.scale;
+    for (const item of [...e.dataTransfer.items]) {
+      if (item.kind !== 'file') continue;
+      const file = item.getAsFile();
+      const src  = await readFileAsDataUrl(file);
+      if (file.type.startsWith('image/')) {
+        widgetMgr.add({ type: 'image', src, x: cx - 200, y: cy - 150 });
+      } else {
+        widgetMgr.add({ type: 'file', src, filename: file.name, mimeType: file.type, x: cx - 210, y: cy - 17 });
+      }
+      mgr.save();
+    }
+  });
+
+  // ── Clipboard-Paste (Bilder) ────────────────────────────────────────────────
+  document.addEventListener('paste', async e => {
+    if (e.target.isContentEditable || e.target.matches('input, textarea')) return;
+    const cx = (viewportEl.clientWidth  / 2 - cam.tx) / cam.scale;
+    const cy = (viewportEl.clientHeight / 2 - cam.ty) / cam.scale;
+    for (const item of [...e.clipboardData.items]) {
+      if (!item.type.startsWith('image/')) continue;
+      const file = item.getAsFile();
+      const src  = await readFileAsDataUrl(file);
+      widgetMgr.add({ type: 'image', src, x: cx - 200, y: cy - 150 });
+      mgr.save();
+      break;
+    }
   });
 
   // ── Tastaturkürzel ──────────────────────────────────────────────────────────
 
   document.addEventListener('keydown', e => {
-    if (e.code === 'Space' && !e.target.matches('input, textarea')) {
+    if (e.code === 'Space' && !e.target.matches('input, textarea') && !e.target.isContentEditable) {
       e.preventDefault(); spaceHeld = true; updateCursor();
     }
     if (e.key === 'Escape') {
@@ -1038,6 +1373,66 @@ document.addEventListener('DOMContentLoaded', async () => {
         mgr.save();
         return { ok: true };
       }
+
+      // ── Widgets ──────────────────────────────────────────────────────────────
+      case 'addText': {
+        const cx = (viewportEl.clientWidth  / 2 - cam.tx) / cam.scale;
+        const cy = (viewportEl.clientHeight / 2 - cam.ty) / cam.scale;
+        const w  = widgetMgr.add({ type: 'text', text: payload.text || '',
+          x: payload.x ?? cx - 140, y: payload.y ?? cy - 80,
+          w: payload.w, h: payload.h });
+        mgr.save();
+        return { ok: true, id: w.id };
+      }
+
+      case 'addImage': {
+        const cx = (viewportEl.clientWidth  / 2 - cam.tx) / cam.scale;
+        const cy = (viewportEl.clientHeight / 2 - cam.ty) / cam.scale;
+        const w  = widgetMgr.add({ type: 'image', src: payload.dataUrl || payload.src || '',
+          x: payload.x ?? cx - 200, y: payload.y ?? cy - 150,
+          w: payload.w, h: payload.h });
+        mgr.save();
+        return { ok: true, id: w.id };
+      }
+
+      case 'addFile': {
+        const cx = (viewportEl.clientWidth  / 2 - cam.tx) / cam.scale;
+        const cy = (viewportEl.clientHeight / 2 - cam.ty) / cam.scale;
+        const w  = widgetMgr.add({ type: 'file',
+          src: payload.dataUrl || payload.src || '',
+          filename: payload.filename || 'Datei', mimeType: payload.mimeType || '',
+          x: payload.x ?? cx - 210, y: payload.y ?? cy - 260,
+          w: payload.w, h: payload.h });
+        mgr.save();
+        return { ok: true, id: w.id };
+      }
+
+      case 'getWidgets':
+        return { widgets: widgetMgr.toJSON() };
+
+      case 'removeWidget':
+        widgetMgr.remove(payload.id);
+        mgr.save();
+        return { ok: true };
+
+      case 'updateWidget': {
+        const w = widgetMgr.widgets.get(payload.id);
+        if (!w) return { error: 'Widget nicht gefunden' };
+        if (payload.x !== undefined) w.x = payload.x;
+        if (payload.y !== undefined) w.y = payload.y;
+        if (payload.w !== undefined) w.w = payload.w;
+        if (payload.h !== undefined) w.h = payload.h;
+        w._applyGeometry();
+        if (payload.text !== undefined && w instanceof TextWidget)  w.setText(payload.text);
+        if (payload.src  !== undefined && w instanceof ImageWidget) w.setSrc(payload.src);
+        mgr.save();
+        return { ok: true };
+      }
+
+      case 'clearWidgets':
+        widgetMgr.removeAll();
+        mgr.save();
+        return { ok: true };
 
       default:
         return { error: `Unbekannter Befehl: ${cmd}` };

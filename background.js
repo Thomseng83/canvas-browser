@@ -292,7 +292,14 @@ async function handleCommand(cmd, payload) {
       case 'tilePanels':
       case 'fullscreen':
       case 'closeFullscreen':
-      case 'setCamera': {
+      case 'setCamera':
+      case 'addText':
+      case 'addImage':
+      case 'addFile':
+      case 'getWidgets':
+      case 'removeWidget':
+      case 'updateWidget':
+      case 'clearWidgets': {
         const tab = await ensureCanvas();
         return await chrome.tabs.sendMessage(tab.id, { cmd, payload });
       }
